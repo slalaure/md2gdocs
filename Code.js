@@ -19,13 +19,9 @@ function doGet(e) {
   const MERMAID_ENDPOINT = '';
   template.mermaidUrl = MERMAID_BASE_URL + MERMAID_ENDPOINT;
 
-  // [ACTION_REQUIRED]: Update with your custom favicon image URL (.png or .ico)
-  const FAVICON_URL = 'INSERT_FAVICON_URL_HERE';
-
   return template
     .evaluate()
     .setTitle('Markdown & Mermaid Document Renderer')
-    .setFaviconUrl(FAVICON_URL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
