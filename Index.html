@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <title>Markdown & Mermaid Renderer</title>
+    <!-- [ACTION_REQUIRED]: Replace with your custom icon URL if needed -->
+    <link rel="icon" href="INSERT_FAVICON_URL_HERE" type="image/x-icon">
+    <script src="<?!= markedUrl ?>"></script>
+
+    <!-- Librairie Mermaid (Version 9.4.3 fixée pour garantir le fonctionnement local) -->
+    <script src="<?!= mermaidUrl ?>"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f6f8fa;
+        color: #24292e;
+      }
+
+      .toolbar {
+        background-color: #24292f;
+        color: #ffffff;
+        padding: 12px 20px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .toolbar input[type="text"] {
+        flex: 1;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #444c56;
+        background: #2d333b;
+        color: #adbac7;
+        font-size: 14px;
+      }
+
+      .toolbar button {
+        padding: 8px 16px;
+        background-color: #2da44e;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      .toolbar button:hover {
+        background-color: #2c974b;
+      }
+
+      .toolbar button.secondary {
+        background-color: #373e47;
+      }
+
+      .toolbar button.secondary:hover {
+        background-color: #444c56;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 24px auto;
+        padding: 32px;
+        background: #ffffff;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      }
+
+      textarea {
+        width: 100%;
+        height: 250px;
+        font-family: monospace;
+        padding: 12px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        box-sizing: border-box;
+        margin-bottom: 16px;
+        resize: vertical;
+      }
+
+      .mermaid {
+        display: flex;
+        justify-content: center;
+        margin: 20px 0;
+        background: #ffffff;
+      }
+
+      .mermaid-error {
+        color: #cf222e;
+        background-color: #ffebe9;
+        border: 1px solid rgba(255,129,130,0.4);
+        padding: 12px;
+        border-radius: 6px;
+        font-family: monospace;
+        font-size: 13px;
+        white-space: pre-wrap;
+      }
+
+      /* In-Page Export Modal */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-content {
+        background: #ffffff;
+        padding: 24px;
+        border-radius: 8px;
+        width: 520px;
+        max-width: 90%;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+
+      .modal-content h3 {
+        margin-top: 0;
+        margin-bottom: 16px;
+        color: #24292f;
+      }
+
+      .modal-field {
+        margin-bottom: 14px;
+      }
+
+      .modal-field label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: #24292f;
+      }
+
+      .modal-field input[type="text"] {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+
+      .modal-field-row {
+        display: flex;
+        gap: 12px;
+      }
+
+      .modal-field-row .modal-field {
+        flex: 1;
+      }
+
+      .modal-field input[type="color"] {
+        width: 100%;
+        height: 36px;
+        padding: 2px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      /* Print Stylesheet */
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+
+        body {
+          background-color: #ffffff;
+        }
+
+        .container {
+          max-width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+
+        .markdown-body {
+          font-size: 12pt;
+        }
+
+        .mermaid {
+          display: block !important;
+          text-align: center;
+          page-break-inside: avoid;
+        }
+
+        .mermaid svg {
+          max-width: 100% !important;
+          height: auto !important;
+          page-break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar no-print">
+      <input type="text" id="fileIdInput" placeholder="Enter Google Drive File ID...">
+      <button onclick="loadFileFromDrive()">Load Drive File</button>
+      <button class="secondary" onclick="triggerPrint()">Print / Save PDF</button>
+      <button class="secondary" id="exportDocBtn" onclick="openExportModal()">Export to Google Doc</button>
+    </div>
+
+    <div class="container">
+      <div id="inputSection" class="no-print">
+        <textarea id="markdownInput" placeholder="Or paste raw Markdown content directly here..."></textarea>
+        <button style="padding: 8px 16px; background-color: #0969da; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;" onclick="renderMarkdown()">Render Document</button>
+      </div>
+
+      <div id="renderArea" class="markdown-body" style="margin-top: 20px;"></div>
+    </div>
+
+    <!-- Export Options Modal Dialog -->
+    <div id="exportModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Export to Google Doc</h3>
+        
+        <div class="modal-field">
+          <label for="modalDocTitle">Document Title</label>
+          <input type="text" id="modalDocTitle" placeholder="Enter document title...">
+        </div>
+
+        <div class="modal-field">
+          <label>Target Google Drive Folder</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+            <button type="button" class="secondary" id="folderUpBtn" onclick="navigateUpFolder()" style="padding: 4px 10px; font-size: 12px;">⬆ Up</button>
+            <span id="currentFolderLabel" style="font-size: 12px; font-weight: 600; color: #0969da; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">Loading Drive...</span>
+          </div>
+          <div id="folderList" style="height: 120px; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 6px; background: #fafafa; padding: 4px;"></div>
+          <input type="hidden" id="modalFolderId" value="">
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #d0d7de; margin: 16px 0;">
+        <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #57606a;">Table Styling Options</h4>
+
+        <div class="modal-field-row">
+          <div class="modal-field">
+            <label for="modalHeaderBg">Header Background</label>
+            <input type="color" id="modalHeaderBg" value="#24292F">
+          </div>
+          <div class="modal-field">
+            <label for="modalHeaderText">Header Text Color</label>
+            <input type="color" id="modalHeaderText" value="#FFFFFF">
+          </div>
+        </div>
+
+        <div class="modal-field-row">
+          <div class="modal-field">
+            <label for="modalBorderColor">Table Border Color</label>
+            <input type="color" id="modalBorderColor" value="#D0D7DE">
+          </div>
+          <div class="modal-field">
+            <label for="modalAltRowBg">Alternate Row Background</label>
+            <input type="color" id="modalAltRowBg" value="#F6F8FA">
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="secondary" onclick="closeExportModal()">Cancel</button>
+          <button onclick="confirmDocExport()">Confirm Export</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      if (typeof mermaid !== 'undefined') {
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+      }
+
+      let currentFolderData = { id: '', parentId: null };
+
+      function loadFileFromDrive() {
+        const fileId = document.getElementById('fileIdInput').value.trim();
+        if (!fileId) {
+          alert('Please enter a valid Google Drive File ID.');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function(content) {
+            document.getElementById('markdownInput').value = content;
+            renderMarkdown();
+          })
+          .withFailureHandler(function(error) {
+            alert('Error loading file: ' + error.message);
+          })
+          .getMarkdownFromDrive(fileId);
+      }
+
+      function renderMarkdown() {
+        return new Promise(function(resolve) {
+          const rawMarkdown = document.getElementById('markdownInput').value;
+          const renderArea = document.getElementById('renderArea');
+          
+          renderArea.innerHTML = marked.parse(rawMarkdown);
+
+          const codeBlocks = renderArea.querySelectorAll('code.language-mermaid, code.lang-mermaid, pre code');
+          codeBlocks.forEach(function(block) {
+            const text = block.textContent.trim();
+            const isMermaidBlock = block.classList.contains('language-mermaid') ||
+                                   block.classList.contains('lang-mermaid') ||
+                                   text.startsWith('flowchart') ||
+                                   text.startsWith('graph') ||
+                                   text.startsWith('sequenceDiagram') ||
+                                   text.startsWith('gantt') ||
+                                   text.startsWith('classDiagram') ||
+                                   text.startsWith('stateDiagram') ||
+                                   text.startsWith('erDiagram') ||
+                                   text.startsWith('pie') ||
+                                   text.startsWith('journey') ||
+                                   text.startsWith('gitGraph') ||
+                                   text.startsWith('mindmap');
+
+            if (isMermaidBlock) {
+              const container = document.createElement('div');
+              container.className = 'mermaid';
+              container.textContent = text;
+              
+              const target = (block.parentElement && block.parentElement.tagName === 'PRE') 
+                ? block.parentElement 
+                : block;
+                
+              target.replaceWith(container);
+            }
+          });
+
+          const mermaidNodes = renderArea.querySelectorAll('.mermaid');
+          if (mermaidNodes.length === 0) {
+            resolve();
+            return;
+          }
+
+          const renderPromises = [];
+          mermaidNodes.forEach(function(node, index) {
+            const code = node.textContent.trim();
+            if (!code) return;
+
+            const uniqueId = 'mermaid-diagram-' + Date.now() + '-' + index;
+
+            const p = new Promise(function(res) {
+              try {
+                mermaid.render(uniqueId, code, function(svgCode) {
+                  node.innerHTML = svgCode;
+                  res();
+                });
+              } catch (err) {
+                console.error('Mermaid render error:', err);
+                const errBox = document.createElement('div');
+                errBox.className = 'mermaid-error';
+                errBox.textContent = 'Mermaid Syntax Error:\n' + err.message;
+                node.innerHTML = '';
+                node.appendChild(errBox);
+                res();
+              }
+            });
+            renderPromises.push(p);
+          });
+
+          Promise.all(renderPromises).then(function() {
+            resolve();
+          });
+        });
+      }
+
+      function triggerPrint() {
+        renderMarkdown().then(function() {
+          setTimeout(function() {
+            window.print();
+          }, 300);
+        });
+      }
+
+      function svgToPng(svgEl) {
+        return new Promise(function(resolve) {
+          try {
+            const clone = svgEl.cloneNode(true);
+            const bbox = svgEl.getBoundingClientRect();
+            const width = bbox.width || 800;
+            const height = bbox.height || 600;
+
+            clone.setAttribute('width', width);
+            clone.setAttribute('height', height);
+
+            const xml = new XMLSerializer().serializeToString(clone);
+            const svg64 = btoa(unescape(encodeURIComponent(xml)));
+            const image = new Image();
+
+            image.onload = function() {
+              const canvas = document.createElement('canvas');
+              canvas.width = width * 2;
+              canvas.height = height * 2;
+              const ctx = canvas.getContext('2d');
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/png'));
+            };
+
+            image.onerror = function() {
+              resolve(null);
+            };
+
+            image.src = 'data:image/svg+xml;base64,' + svg64;
+          } catch(e) {
+            console.error('SVG conversion error:', e);
+            resolve(null);
+          }
+        });
+      }
+
+      function openExportModal() {
+        const rawMarkdown = document.getElementById('markdownInput').value.trim();
+        if (!rawMarkdown) {
+          alert('Please enter or load some Markdown content first.');
+          return;
+        }
+
+        let defaultTitle = 'Exported Markdown Document';
+        const headingMatch = rawMarkdown.match(/^#\s+(.+)$/m);
+        if (headingMatch && headingMatch[1]) {
+          defaultTitle = headingMatch[1].trim();
+        }
+
+        document.getElementById('modalDocTitle').value = defaultTitle;
+        document.getElementById('exportModal').style.display = 'flex';
+
+        loadFolderContents('root');
+      }
+
+      function loadFolderContents(folderId) {
+        const listEl = document.getElementById('folderList');
+        const labelEl = document.getElementById('currentFolderLabel');
+        const upBtn = document.getElementById('folderUpBtn');
+
+        listEl.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #57606a;">Loading folders...</div>';
+
+        google.script.run
+          .withSuccessHandler(function(data) {
+            currentFolderData = { id: data.currentFolderId, parentId: data.parentId };
+            document.getElementById('modalFolderId').value = data.currentFolderId;
+            labelEl.textContent = '📁 ' + data.currentFolderName;
+            upBtn.disabled = !data.parentId;
+
+            listEl.innerHTML = '';
+            if (!data.folders || data.folders.length === 0) {
+              listEl.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #8c959f; font-style: italic;">No subfolders found</div>';
+              return;
+            }
+
+            data.folders.forEach(function(f) {
+              const item = document.createElement('div');
+              item.style.padding = '6px 8px';
+              item.style.fontSize = '13px';
+              item.style.cursor = 'pointer';
+              item.style.borderRadius = '4px';
+              item.style.display = 'flex';
+              item.style.alignItems = 'center';
+              item.style.gap = '6px';
+              item.innerHTML = '📁 <span>' + escapeHtml(f.name) + '</span>';
+
+              item.onmouseover = function() { item.style.backgroundColor = '#f0f6fc'; };
+              item.onmouseout = function() { item.style.backgroundColor = 'transparent'; };
+              item.onclick = function() { loadFolderContents(f.id); };
+
+              listEl.appendChild(item);
+            });
+          })
+          .withFailureHandler(function(err) {
+            listEl.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #cf222e;">Error: ' + escapeHtml(err.message) + '</div>';
+          })
+          .getDriveFolders(folderId);
+      }
+
+      function navigateUpFolder() {
+        if (currentFolderData.parentId) {
+          loadFolderContents(currentFolderData.parentId);
+        }
+      }
+
+      function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      function closeExportModal() {
+        document.getElementById('exportModal').style.display = 'none';
+      }
+
+      function confirmDocExport() {
+        const docTitle = document.getElementById('modalDocTitle').value.trim() || 'Exported Markdown Document';
+        const folderId = document.getElementById('modalFolderId').value.trim();
+        const tableStyle = {
+          headerBg: document.getElementById('modalHeaderBg').value,
+          headerText: document.getElementById('modalHeaderText').value,
+          borderColor: document.getElementById('modalBorderColor').value,
+          altRowBg: document.getElementById('modalAltRowBg').value
+        };
+
+        closeExportModal();
+
+        const btn = document.getElementById('exportDocBtn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Exporting...';
+        btn.disabled = true;
+
+        const rawMarkdown = document.getElementById('markdownInput').value.trim();
+
+        renderMarkdown().then(async function() {
+          const mermaidNodes = document.querySelectorAll('#renderArea .mermaid');
+          const diagrams = [];
+
+          for (let i = 0; i < mermaidNodes.length; i++) {
+            const svg = mermaidNodes[i].querySelector('svg');
+            if (svg) {
+              const pngData = await svgToPng(svg);
+              diagrams.push(pngData);
+            } else {
+              diagrams.push(null);
+            }
+          }
+
+          let mermaidIndex = 0;
+          const processedMarkdown = rawMarkdown.replace(/```([\s\S]*?)```/g, function(match, codeContent) {
+            const trimmed = codeContent.trim();
+            const firstLine = trimmed.split('\n')[0].toLowerCase();
+            const isMermaid = firstLine.startsWith('mermaid') || 
+                              trimmed.startsWith('flowchart') || 
+                              trimmed.startsWith('graph') || 
+                              trimmed.startsWith('sequencediagram') ||
+                              trimmed.startsWith('gantt') ||
+                              trimmed.startsWith('classdiagram') ||
+                              trimmed.startsWith('statediagram') ||
+                              trimmed.startsWith('erdiagram') ||
+                              trimmed.startsWith('pie') ||
+                              trimmed.startsWith('journey') ||
+                              trimmed.startsWith('gitgraph') ||
+                              trimmed.startsWith('mindmap');
+
+            if (isMermaid) {
+              const token = '\n[[MERMAID_DIAGRAM_' + mermaidIndex + ']]\n';
+              mermaidIndex++;
+              return token;
+            }
+            return match;
+          });
+
+          google.script.run
+            .withSuccessHandler(function(docUrl) {
+              btn.textContent = originalText;
+              btn.disabled = false;
+              if (confirm('Google Doc created successfully!\n\nWould you like to open it now?')) {
+                window.open(docUrl, '_blank');
+              }
+            })
+            .withFailureHandler(function(error) {
+              btn.textContent = originalText;
+              btn.disabled = false;
+              alert('Export failed: ' + error.message);
+            })
+            .exportToGoogleDoc(docTitle, folderId, processedMarkdown, diagrams, tableStyle);
+        });
+      }
+    </script>
+  </body>
+</html>
